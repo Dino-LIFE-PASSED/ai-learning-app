@@ -12,11 +12,13 @@ export default async function LessonPage({
 }) {
   const { slug, mainTopicSlug, subtopicSlug } = await params;
 
-  const lesson = readLesson(slug, mainTopicSlug, subtopicSlug);
-  if (!lesson) notFound();
+  const [lesson, topic, mainTopic] = await Promise.all([
+    readLesson(slug, mainTopicSlug, subtopicSlug),
+    readTopic(slug),
+    readMainTopic(slug, mainTopicSlug),
+  ]);
 
-  const topic = readTopic(slug);
-  const mainTopic = readMainTopic(slug, mainTopicSlug);
+  if (!lesson) notFound();
 
   if (!lesson.content.trim()) {
     return (
@@ -37,13 +39,10 @@ export default async function LessonPage({
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
-      {/* Breadcrumb */}
       <nav className="text-sm text-gray-600 mb-8 flex flex-wrap gap-1.5 items-center font-mono">
         <Link href="/topics" className="hover:text-gray-300 transition-colors">topics</Link>
         <span className="text-gray-700">/</span>
-        <Link href={`/topics/${slug}`} className="hover:text-gray-300 transition-colors">
-          {topic?.data.title ?? slug}
-        </Link>
+        <Link href={`/topics/${slug}`} className="hover:text-gray-300 transition-colors">{topic?.data.title ?? slug}</Link>
         <span className="text-gray-700">/</span>
         <span className="text-gray-500">{mainTopic?.data.title ?? mainTopicSlug}</span>
         <span className="text-gray-700">/</span>
@@ -51,7 +50,6 @@ export default async function LessonPage({
       </nav>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-10">
-        {/* Main Content */}
         <div>
           <div className="mb-8">
             <p className="text-orange-400 text-sm mb-2 font-mono">{mainTopic?.data.title}</p>
@@ -86,7 +84,6 @@ export default async function LessonPage({
           </div>
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-6">
           {(lesson.data.keyInsights?.length ?? 0) > 0 && (
             <div className="bg-orange-500/5 border border-orange-500/20 rounded-2xl p-5 sticky top-20">
@@ -101,17 +98,13 @@ export default async function LessonPage({
                   </li>
                 ))}
               </ul>
-
               {(lesson.data.relatedTopics?.length ?? 0) > 0 && (
                 <div className="mt-5 pt-5 border-t border-orange-500/10">
                   <p className="text-xs text-gray-600 mb-2 font-mono">// related</p>
                   <div className="flex flex-wrap gap-1.5">
                     {lesson.data.relatedTopics.map((rt) => (
-                      <Link
-                        key={rt}
-                        href={`/topics/${rt}`}
-                        className="text-xs border border-gray-700 text-gray-400 hover:border-orange-500/40 hover:text-orange-300 px-2.5 py-1 rounded-full transition-colors font-mono"
-                      >
+                      <Link key={rt} href={`/topics/${rt}`}
+                        className="text-xs border border-gray-700 text-gray-400 hover:border-orange-500/40 hover:text-orange-300 px-2.5 py-1 rounded-full transition-colors font-mono">
                         {rt}
                       </Link>
                     ))}

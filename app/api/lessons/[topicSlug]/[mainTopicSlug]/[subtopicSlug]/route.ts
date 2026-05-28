@@ -6,7 +6,7 @@ export async function GET(
   { params }: { params: Promise<{ topicSlug: string; mainTopicSlug: string; subtopicSlug: string }> }
 ) {
   const { topicSlug, mainTopicSlug, subtopicSlug } = await params;
-  const lesson = readLesson(topicSlug, mainTopicSlug, subtopicSlug);
+  const lesson = await readLesson(topicSlug, mainTopicSlug, subtopicSlug);
   if (!lesson) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ slug: subtopicSlug, ...lesson.data, content: lesson.content });
 }

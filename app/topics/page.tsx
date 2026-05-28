@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { listTopics } from "@/lib/content";
 
-export default function TopicsPage() {
-  const topics = listTopics();
+export default async function TopicsPage() {
+  const topics = await listTopics();
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
@@ -25,10 +25,7 @@ export default function TopicsPage() {
           <p className="font-mono text-4xl mb-4 text-gray-700">{ }</p>
           <p className="text-lg">ยังไม่มีหัวข้อ</p>
           <p className="text-sm mt-2">เริ่มต้นด้วยการสร้างหัวข้อแรกของคุณ</p>
-          <Link
-            href="/"
-            className="inline-block mt-6 text-orange-400 hover:underline text-sm font-mono"
-          >
+          <Link href="/" className="inline-block mt-6 text-orange-400 hover:underline text-sm font-mono">
             -- สร้างหัวข้อแรก →
           </Link>
         </div>
@@ -45,13 +42,9 @@ export default function TopicsPage() {
                   <h2 className="font-semibold text-lg group-hover:text-orange-400 transition-colors truncate">
                     {topic.title}
                   </h2>
-                  <p className="text-gray-400 text-sm mt-2 line-clamp-2">
-                    {topic.description}
-                  </p>
+                  <p className="text-gray-400 text-sm mt-2 line-clamp-2">{topic.description}</p>
                 </div>
-                <span className="text-gray-600 group-hover:text-orange-400 transition-colors mt-1 shrink-0 font-mono">
-                  →
-                </span>
+                <span className="text-gray-600 group-hover:text-orange-400 transition-colors mt-1 shrink-0 font-mono">→</span>
               </div>
               <div className="mt-4 flex items-center gap-2 text-xs text-gray-600 font-mono">
                 <span>{topic.mainTopics?.length ?? 0} modules</span>

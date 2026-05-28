@@ -8,16 +8,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing params" }, { status: 400 });
   }
 
-  const existing = readLesson(topicSlug, mainTopicSlug, subtopicSlug);
+  const existing = await readLesson(topicSlug, mainTopicSlug, subtopicSlug);
   if (!existing) return NextResponse.json({ error: "Subtopic not found" }, { status: 404 });
 
-  // Already has content — return existing
   if (existing.content.trim().length > 0) {
     return NextResponse.json({ slug: subtopicSlug, ...existing.data, content: existing.content });
   }
 
-  const topic = readTopic(topicSlug);
-  const mainTopic = readMainTopic(topicSlug, mainTopicSlug);
+  const [topic, mainTopic] = await Promise.all([
+    readTopic(topicSlug),
+    readMainTopic(topicSlug, mainTopicSlug),
+  ]);
 
   const generated = await generateLesson(
     topic?.data.title ?? topicSlug,
@@ -32,7 +33,7 @@ export async function POST(req: Request) {
     questions: generated.questions,
   };
 
-  writeLesson(topicSlug, mainTopicSlug, subtopicSlug, updatedData, generated.content);
+  await writeLesson(topicSlug, mainTopicSlug, subtopicSlug, updatedData, generated.content);
 
   return NextResponse.json({ slug: subtopicSlug, ...updatedData, content: generated.content });
 }

@@ -12,7 +12,7 @@ import {
 } from "@/lib/content";
 
 export async function GET() {
-  const topics = listTopics();
+  const topics = await listTopics();
   return NextResponse.json(topics);
 }
 
@@ -27,11 +27,10 @@ export async function POST(req: Request) {
 
   const now = new Date().toISOString();
 
-  // Generate unique slugs — deduplicate if multiple titles produce the same slug
   function uniqueSlugs(titles: string[], prefix: string): string[] {
     const used = new Set<string>();
-    return titles.map((title, i) => {
-      let base = toSlug(title) || `${prefix}-${i + 1}`;
+    return titles.map((t, i) => {
+      let base = toSlug(t) || `${prefix}-${i + 1}`;
       let candidate = base;
       let n = 2;
       while (used.has(candidate)) candidate = `${base}-${n++}`;
@@ -51,44 +50,47 @@ export async function POST(req: Request) {
     createdAt: now,
     mainTopics: mainTopicSlugs,
   };
-  writeTopic(topicSlug, topicData);
+  await writeTopic(topicSlug, topicData);
 
-  curriculum.mainTopics.forEach((mt, i) => {
-    const mtSlug = mainTopicSlugs[i];
-    const subtopicSlugs = uniqueSlugs(
-      (mt.subtopics ?? []).map((st) => st.title),
-      `lesson-${i + 1}`
-    );
+  await Promise.all(
+    curriculum.mainTopics.map(async (mt, i) => {
+      const mtSlug = mainTopicSlugs[i];
+      const subtopicSlugs = uniqueSlugs(
+        (mt.subtopics ?? []).map((st) => st.title),
+        `lesson-${i + 1}`
+      );
 
-    const mtData: MainTopicFrontmatter = {
-      id: mtSlug,
-      type: "mainTopic",
-      title: mt.title,
-      description: mt.description,
-      order: i + 1,
-      topic: topicSlug,
-      subtopics: subtopicSlugs,
-    };
-    writeMainTopic(topicSlug, mtSlug, mtData);
-
-    // Write subtopic stub files (no lesson content yet)
-    (mt.subtopics ?? []).forEach((st, j) => {
-      const stSlug = subtopicSlugs[j];
-      const stData: LessonFrontmatter = {
-        id: stSlug,
-        type: "lesson" as const,
-        title: st.title,
-        description: st.description,
-        order: j + 1,
-        mainTopic: mtSlug,
+      const mtData: MainTopicFrontmatter = {
+        id: mtSlug,
+        type: "mainTopic",
+        title: mt.title,
+        description: mt.description,
+        order: i + 1,
         topic: topicSlug,
-        relatedTopics: [] as string[],
-        keyInsights: [] as string[],
-        questions: [] as string[],
+        subtopics: subtopicSlugs,
       };
-      writeLesson(topicSlug, mtSlug, stSlug, stData, "");
-    });
-  });
+      await writeMainTopic(topicSlug, mtSlug, mtData);
+
+      await Promise.all(
+        (mt.subtopics ?? []).map(async (st, j) => {
+          const stSlug = subtopicSlugs[j];
+          const stData: LessonFrontmatter = {
+            id: stSlug,
+            type: "lesson",
+            title: st.title,
+            description: st.description,
+            order: j + 1,
+            mainTopic: mtSlug,
+            topic: topicSlug,
+            relatedTopics: [],
+            keyInsights: [],
+            questions: [],
+          };
+          await writeLesson(topicSlug, mtSlug, stSlug, stData, "");
+        })
+      );
+    })
+  );
 
   return NextResponse.json({ slug: topicSlug, ...topicData });
 }

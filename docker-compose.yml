@@ -6,10 +6,5 @@ services:
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - TAVILY_API_KEY=${TAVILY_API_KEY}
-      - DATA_DIR=/app/data
-    volumes:
-      - lrn_data:/app/data
+      - DATABASE_URL=${DATABASE_URL}
     restart: unless-stopped
-
-volumes:
-  lrn_data:
