@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -28,8 +28,12 @@ export default function AutoGenerateLesson({
   const [status, setStatus] = useState<"loading" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
   const router = useRouter();
+  const started = useRef(false);
 
   useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+
     fetch("/api/lessons/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -40,13 +44,15 @@ export default function AutoGenerateLesson({
           const data = await res.json().catch(() => ({}));
           throw new Error(data.error ?? "เกิดข้อผิดพลาด");
         }
-        router.refresh();
+        // hard reload so server component re-renders with new lesson content
+        window.location.reload();
       })
       .catch((err: Error) => {
         setStatus("error");
         setErrorMsg(err.message);
       });
-  }, [topicSlug, mainTopicSlug, subtopicSlug, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
