@@ -1,29 +1,49 @@
-import fs from "fs";
+import Database from "better-sqlite3";
 import path from "path";
-import matter from "gray-matter";
+import fs from "fs";
 import slugify from "slugify";
 
-const CONTENT_DIR = process.env.CONTENT_DIR
-  ? path.join(process.env.CONTENT_DIR, "topics")
-  : path.join(process.cwd(), "content", "topics");
+// ── DB setup ──────────────────────────────────────────────
 
-export function toSlug(text: string): string {
-  return slugify(text, { lower: true, strict: true, locale: "th" });
-}
+const DATA_DIR = process.env.DATA_DIR ?? path.join(process.cwd(), "data");
+fs.mkdirSync(DATA_DIR, { recursive: true });
 
-export function getTopicDir(topicSlug: string) {
-  return path.join(CONTENT_DIR, topicSlug);
-}
+const db = new Database(path.join(DATA_DIR, "lrn.db"));
 
-export function getMainTopicDir(topicSlug: string, mainTopicSlug: string) {
-  return path.join(CONTENT_DIR, topicSlug, mainTopicSlug);
-}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS topics (
+    id          TEXT PRIMARY KEY,
+    title       TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL,
+    main_topics TEXT NOT NULL DEFAULT '[]'
+  );
+  CREATE TABLE IF NOT EXISTS main_topics (
+    id          TEXT NOT NULL,
+    topic_id    TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    subtopics   TEXT NOT NULL DEFAULT '[]',
+    PRIMARY KEY (topic_id, id)
+  );
+  CREATE TABLE IF NOT EXISTS lessons (
+    id              TEXT NOT NULL,
+    main_topic_id   TEXT NOT NULL,
+    topic_id        TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    description     TEXT NOT NULL DEFAULT '',
+    content         TEXT NOT NULL DEFAULT '',
+    key_insights    TEXT NOT NULL DEFAULT '[]',
+    questions       TEXT NOT NULL DEFAULT '[]',
+    related_topics  TEXT NOT NULL DEFAULT '[]',
+    sort_order      INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (topic_id, main_topic_id, id)
+  );
+`);
 
-export function getLessonPath(topicSlug: string, mainTopicSlug: string, subtopicSlug: string) {
-  return path.join(CONTENT_DIR, topicSlug, mainTopicSlug, `${subtopicSlug}.md`);
-}
-
-// --- Types ---
+// ── Types ─────────────────────────────────────────────────
 
 export interface TopicFrontmatter {
   id: string;
@@ -57,23 +77,50 @@ export interface LessonFrontmatter {
   questions: string[];
 }
 
-// --- Readers ---
+// ── Helpers ───────────────────────────────────────────────
+
+export function toSlug(text: string): string {
+  return slugify(text, { lower: true, strict: true, locale: "th" });
+}
+
+// ── Readers ───────────────────────────────────────────────
 
 export function readTopic(topicSlug: string): { data: TopicFrontmatter; content: string } | null {
-  const filePath = path.join(getTopicDir(topicSlug), "index.md");
-  if (!fs.existsSync(filePath)) return null;
-  const { data, content } = matter(fs.readFileSync(filePath, "utf-8"));
-  return { data: data as TopicFrontmatter, content };
+  const row = db.prepare("SELECT * FROM topics WHERE id = ?").get(topicSlug) as Record<string, unknown> | undefined;
+  if (!row) return null;
+  return {
+    data: {
+      id: row.id as string,
+      type: "topic",
+      title: row.title as string,
+      description: row.description as string,
+      createdAt: row.created_at as string,
+      mainTopics: JSON.parse(row.main_topics as string),
+    },
+    content: "",
+  };
 }
 
 export function readMainTopic(
   topicSlug: string,
   mainTopicSlug: string
 ): { data: MainTopicFrontmatter; content: string } | null {
-  const filePath = path.join(getMainTopicDir(topicSlug, mainTopicSlug), "index.md");
-  if (!fs.existsSync(filePath)) return null;
-  const { data, content } = matter(fs.readFileSync(filePath, "utf-8"));
-  return { data: data as MainTopicFrontmatter, content };
+  const row = db
+    .prepare("SELECT * FROM main_topics WHERE topic_id = ? AND id = ?")
+    .get(topicSlug, mainTopicSlug) as Record<string, unknown> | undefined;
+  if (!row) return null;
+  return {
+    data: {
+      id: row.id as string,
+      type: "mainTopic",
+      title: row.title as string,
+      description: row.description as string,
+      order: row.sort_order as number,
+      topic: row.topic_id as string,
+      subtopics: JSON.parse(row.subtopics as string),
+    },
+    content: "",
+  };
 }
 
 export function readLesson(
@@ -81,36 +128,67 @@ export function readLesson(
   mainTopicSlug: string,
   subtopicSlug: string
 ): { data: LessonFrontmatter; content: string } | null {
-  const filePath = getLessonPath(topicSlug, mainTopicSlug, subtopicSlug);
-  if (!fs.existsSync(filePath)) return null;
-  const { data, content } = matter(fs.readFileSync(filePath, "utf-8"));
-  return { data: data as LessonFrontmatter, content };
+  const row = db
+    .prepare("SELECT * FROM lessons WHERE topic_id = ? AND main_topic_id = ? AND id = ?")
+    .get(topicSlug, mainTopicSlug, subtopicSlug) as Record<string, unknown> | undefined;
+  if (!row) return null;
+  return {
+    data: {
+      id: row.id as string,
+      type: "lesson",
+      title: row.title as string,
+      description: row.description as string,
+      order: row.sort_order as number,
+      mainTopic: row.main_topic_id as string,
+      topic: row.topic_id as string,
+      relatedTopics: JSON.parse(row.related_topics as string),
+      keyInsights: JSON.parse(row.key_insights as string),
+      questions: JSON.parse(row.questions as string),
+    },
+    content: (row.content as string) ?? "",
+  };
 }
 
 export function listTopics(): TopicFrontmatter[] {
-  if (!fs.existsSync(CONTENT_DIR)) return [];
-  return fs
-    .readdirSync(CONTENT_DIR)
-    .filter((slug) => {
-      const indexPath = path.join(CONTENT_DIR, slug, "index.md");
-      return fs.existsSync(indexPath);
-    })
-    .map((slug) => readTopic(slug)!.data)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const rows = db.prepare("SELECT * FROM topics ORDER BY created_at DESC").all() as Record<string, unknown>[];
+  return rows.map((row) => ({
+    id: row.id as string,
+    type: "topic" as const,
+    title: row.title as string,
+    description: row.description as string,
+    createdAt: row.created_at as string,
+    mainTopics: JSON.parse(row.main_topics as string),
+  }));
 }
 
-// --- Writers ---
+// ── Writers ───────────────────────────────────────────────
 
-export function writeTopic(topicSlug: string, data: TopicFrontmatter, content = "") {
-  const dir = getTopicDir(topicSlug);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, "index.md"), matter.stringify(content, data as unknown as Record<string, unknown>));
+export function writeTopic(topicSlug: string, data: TopicFrontmatter, _content = "") {
+  db.prepare(`
+    INSERT INTO topics (id, title, description, created_at, main_topics)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      title = excluded.title,
+      description = excluded.description,
+      main_topics = excluded.main_topics
+  `).run(topicSlug, data.title, data.description, data.createdAt, JSON.stringify(data.mainTopics));
 }
 
-export function writeMainTopic(topicSlug: string, mainTopicSlug: string, data: MainTopicFrontmatter, content = "") {
-  const dir = getMainTopicDir(topicSlug, mainTopicSlug);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, "index.md"), matter.stringify(content, data as unknown as Record<string, unknown>));
+export function writeMainTopic(
+  topicSlug: string,
+  mainTopicSlug: string,
+  data: MainTopicFrontmatter,
+  _content = ""
+) {
+  db.prepare(`
+    INSERT INTO main_topics (id, topic_id, title, description, sort_order, subtopics)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(topic_id, id) DO UPDATE SET
+      title = excluded.title,
+      description = excluded.description,
+      sort_order = excluded.sort_order,
+      subtopics = excluded.subtopics
+  `).run(mainTopicSlug, topicSlug, data.title, data.description, data.order, JSON.stringify(data.subtopics));
 }
 
 export function writeLesson(
@@ -120,6 +198,27 @@ export function writeLesson(
   data: LessonFrontmatter,
   content: string
 ) {
-  const filePath = getLessonPath(topicSlug, mainTopicSlug, subtopicSlug);
-  fs.writeFileSync(filePath, matter.stringify(content, data as unknown as Record<string, unknown>));
+  db.prepare(`
+    INSERT INTO lessons (id, main_topic_id, topic_id, title, description, content, key_insights, questions, related_topics, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(topic_id, main_topic_id, id) DO UPDATE SET
+      title = excluded.title,
+      description = excluded.description,
+      content = excluded.content,
+      key_insights = excluded.key_insights,
+      questions = excluded.questions,
+      related_topics = excluded.related_topics,
+      sort_order = excluded.sort_order
+  `).run(
+    subtopicSlug,
+    mainTopicSlug,
+    topicSlug,
+    data.title,
+    data.description,
+    content,
+    JSON.stringify(data.keyInsights ?? []),
+    JSON.stringify(data.questions ?? []),
+    JSON.stringify(data.relatedTopics ?? []),
+    data.order
+  );
 }
