@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { generateLesson } from "@/lib/deepseek";
 import { readLesson, writeLesson, readTopic, readMainTopic } from "@/lib/content";
 
+export const maxDuration = 60;
+
 export async function POST(req: Request) {
   const { topicSlug, mainTopicSlug, subtopicSlug } = await req.json();
   if (!topicSlug || !mainTopicSlug || !subtopicSlug) {
@@ -20,20 +22,26 @@ export async function POST(req: Request) {
     readMainTopic(topicSlug, mainTopicSlug),
   ]);
 
-  const generated = await generateLesson(
-    topic?.data.title ?? topicSlug,
-    mainTopic?.data.title ?? mainTopicSlug,
-    existing.data.title,
-    existing.data.description
-  );
+  try {
+    const generated = await generateLesson(
+      topic?.data.title ?? topicSlug,
+      mainTopic?.data.title ?? mainTopicSlug,
+      existing.data.title,
+      existing.data.description
+    );
 
-  const updatedData = {
-    ...existing.data,
-    keyInsights: generated.keyInsights,
-    questions: generated.questions,
-  };
+    const updatedData = {
+      ...existing.data,
+      keyInsights: generated.keyInsights,
+      questions: generated.questions,
+    };
 
-  await writeLesson(topicSlug, mainTopicSlug, subtopicSlug, updatedData, generated.content);
+    await writeLesson(topicSlug, mainTopicSlug, subtopicSlug, updatedData, generated.content);
 
-  return NextResponse.json({ slug: subtopicSlug, ...updatedData, content: generated.content });
+    return NextResponse.json({ slug: subtopicSlug, ...updatedData, content: generated.content });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[generate]", message);
+    return NextResponse.json({ error: `Generation failed: ${message}` }, { status: 500 });
+  }
 }

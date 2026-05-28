@@ -14,10 +14,12 @@ function parseJSONResponse<T>(text: string): T {
   try {
     return JSON.parse(cleaned) as T;
   } catch {
-    // Fix literal control characters inside JSON string values
-    const fixed = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, (c) =>
-      `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`
-    ).replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t");
+    // Fix literal control characters ONLY inside JSON string values
+    const fixed = cleaned.replace(/"(?:[^"\\]|\\[\s\S])*"/g, (match) =>
+      match.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, (c) =>
+        `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`
+      ).replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t")
+    );
     return JSON.parse(fixed) as T;
   }
 }
@@ -74,6 +76,7 @@ export async function generateCurriculum(topic: string): Promise<GeneratedCurric
       },
     ],
     temperature: 0.7,
+    response_format: { type: "json_object" },
   });
 
   const text = response.choices[0].message.content ?? "{}";
@@ -135,6 +138,7 @@ export async function generateLesson(
       },
     ],
     temperature: 0.7,
+    response_format: { type: "json_object" },
   });
 
   const text = response.choices[0].message.content ?? "{}";
