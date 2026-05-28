@@ -3,7 +3,9 @@ import path from "path";
 import matter from "gray-matter";
 import slugify from "slugify";
 
-const CONTENT_DIR = path.join(process.cwd(), "content", "topics");
+const CONTENT_DIR = process.env.CONTENT_DIR
+  ? path.join(process.env.CONTENT_DIR, "topics")
+  : path.join(process.cwd(), "content", "topics");
 
 export function toSlug(text: string): string {
   return slugify(text, { lower: true, strict: true, locale: "th" });
