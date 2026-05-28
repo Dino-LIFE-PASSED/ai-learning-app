@@ -5,6 +5,23 @@ const client = new OpenAI({
   baseURL: "https://api.deepseek.com",
 });
 
+function parseJSONResponse<T>(text: string): T {
+  // Strip markdown code fences the model sometimes adds despite instructions
+  const cleaned = text
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/, "")
+    .trim();
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    // Fix literal control characters inside JSON string values
+    const fixed = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, (c) =>
+      `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`
+    ).replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t");
+    return JSON.parse(fixed) as T;
+  }
+}
+
 export interface CurriculumMainTopic {
   title: string;
   description: string;
@@ -60,7 +77,7 @@ export async function generateCurriculum(topic: string): Promise<GeneratedCurric
   });
 
   const text = response.choices[0].message.content ?? "{}";
-  return JSON.parse(text) as GeneratedCurriculum;
+  return parseJSONResponse<GeneratedCurriculum>(text);
 }
 
 export async function generateLesson(
@@ -121,7 +138,7 @@ export async function generateLesson(
   });
 
   const text = response.choices[0].message.content ?? "{}";
-  return JSON.parse(text) as { content: string; keyInsights: string[]; questions: string[] };
+  return parseJSONResponse<{ content: string; keyInsights: string[]; questions: string[] }>(text);
 }
 
 export async function createAnswerEvaluationStream(
