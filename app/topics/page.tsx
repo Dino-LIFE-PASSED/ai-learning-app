@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { listTopics } from "@/lib/content";
 
+export const dynamic = "force-dynamic";
+
 export default async function TopicsPage() {
   const topics = await listTopics();
 

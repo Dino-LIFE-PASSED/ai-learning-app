@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { marked } from "marked";
 import { readLesson, readTopic, readMainTopic } from "@/lib/content";
 import AutoGenerateLesson from "./AutoGenerateLesson";
+
+export const dynamic = "force-dynamic";
 import ReflectionSection from "./ReflectionSection";
 
 export default async function LessonPage({
